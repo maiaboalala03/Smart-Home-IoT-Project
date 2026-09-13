@@ -1,1 +1,185 @@
+#include <DHT.h>
+#include <ESP32Servo.h>
 
+#define DHTPIN 4
+#define DHTTYPE DHT22
+
+DHT dht(DHTPIN, DHTTYPE);
+
+const int PIR_PIN = 27;
+const int GAS_PIN = 34;
+const int SERVO_PIN = 13;
+const int BUZZER_PIN = 25;
+const int LED_PIN = 32;
+const int BUTTON_PIN = 26;
+
+const int GAS_THRESHOLD = 500;
+const float TEMP_THRESHOLD = 35.0;
+
+const int DOOR_OPEN = 90;
+const int DOOR_LOCKED = 0;
+
+Servo myServo;
+
+bool motionAlert = false;
+bool intruderConfirmed = false;
+
+void setup() {
+  Serial.begin(115200);
+
+  dht.begin();
+  myServo.attach(SERVO_PIN);
+
+  pinMode(PIR_PIN, INPUT);
+  pinMode(GAS_PIN, INPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+  myServo.write(DOOR_LOCKED);
+  digitalWrite(BUZZER_PIN, LOW);
+  digitalWrite(LED_PIN, LOW);
+
+  Serial.println();
+  Serial.println("================================");
+  Serial.println("   SMART HOME SECURITY SYSTEM");
+  Serial.println("================================");
+  Serial.println("System Status: NORMAL");
+  Serial.println("Commands:");
+  Serial.println("SAFE     -> Motion is safe");
+  Serial.println("INTRUDER -> Confirm intruder");
+  Serial.println();
+}
+
+void loop() {
+  float humidity = dht.readHumidity();
+  float temperature = dht.readTemperature();
+
+  int motion = digitalRead(PIR_PIN);
+  int gasValue = analogRead(GAS_PIN);
+  int buttonState = digitalRead(BUTTON_PIN);
+
+  if (isnan(humidity) || isnan(temperature)) {
+    Serial.println("DHT22 ERROR");
+    delay(1000);
+    return;
+  }
+
+  bool gasDetected = gasValue > GAS_THRESHOLD;
+  bool highTemperature = temperature > TEMP_THRESHOLD;
+  bool fireAlert = highTemperature && gasDetected;
+  bool emergencyButton = buttonState == LOW;
+
+  if (motion == HIGH && !motionAlert) {
+    motionAlert = true;
+    Serial.println();
+    Serial.println("!!! MOTION ALERT !!!");
+    Serial.println("Motion detected.");
+    Serial.println("Waiting for user confirmation...");
+    Serial.println("Type INTRUDER or SAFE");
+  }
+
+  if (Serial.available()) {
+    String command = Serial.readStringUntil('\n');
+    command.trim();
+
+    if (command.equalsIgnoreCase("SAFE")) {
+      motionAlert = false;
+      intruderConfirmed = false;
+
+      Serial.println();
+      Serial.println("MOTION STATUS: SAFE");
+      Serial.println("System returned to normal.");
+    }
+
+    else if (command.equalsIgnoreCase("INTRUDER")) {
+      motionAlert = true;
+      intruderConfirmed = true;
+
+      Serial.println();
+      Serial.println("!!! INTRUDER CONFIRMED !!!");
+      Serial.println("Security mode activated.");
+    }
+  }
+
+  if (gasDetected) {
+    myServo.write(DOOR_OPEN);
+  }
+  else if (intruderConfirmed) {
+    myServo.write(DOOR_LOCKED);
+  }
+  else {
+    myServo.write(DOOR_LOCKED);
+  }
+
+  if (fireAlert) {
+    digitalWrite(LED_PIN, HIGH);
+  }
+  else {
+    digitalWrite(LED_PIN, LOW);
+  }
+
+  if (fireAlert  gasDetected  intruderConfirmed || emergencyButton) {
+    digitalWrite(BUZZER_PIN, HIGH);
+  }
+  else {
+    digitalWrite(BUZZER_PIN, LOW);
+  }
+
+  Serial.println("--------------------------------");
+
+  Serial.print("Temperature: ");
+  Serial.print(temperature);
+  Serial.println(" C");
+
+  Serial.print("Humidity: ");
+  Serial.print(humidity);
+  Serial.println(" %");
+
+  Serial.print("Gas Value: ");
+  Serial.println(gasValue);
+
+  Serial.print("Motion: ");
+  Serial.println(motion ? "DETECTED" : "NONE");
+
+  Serial.print("Button: ");
+  Serial.println(emergencyButton ? "PRESSED" : "NORMAL");
+
+  if (fireAlert) {
+    Serial.println("STATUS: FIRE ALERT");
+    Serial.println("Action: GAS + HIGH TEMPERATURE");
+    Serial.println("LED/PUMP: ON");
+    Serial.println("BUZZER: ON");
+    Serial.println("SERVO: OPEN");
+  }
+  else if (gasDetected) {
+    Serial.println("STATUS: GAS ALERT");
+    Serial.println("Action: Gas detected");
+    Serial.println("SERVO: OPEN");
+    Serial.println("BUZZER: ON");
+    Serial.println("LED/PUMP: OFF");
+  }
+  else if (intruderConfirmed) {
+    Serial.println("STATUS: INTRUDER ALERT");
+    Serial.println("Action: Intruder confirmed");
+    Serial.println("SERVO: LOCKED");
+    Serial.println("BUZZER: ON");
+  }otionAlert) {
+    Serial.println("STATUS: MOTION ALERT");
+    Serial.println("Action: Waiting for confirmation");
+  }
+  else if (emergencyButton) {
+    Serial.println("STATUS: EMERGENCY ALERT");
+    Serial.println("Action: Manual emergency button");
+    Serial.println("BUZZER: ON");
+  }
+  else {
+    Serial.println("STATUS: NORMAL");
+    Serial.println("All systems operating normally.");
+  }
+
+  Serial.println("--------------------------------");
+
+  delay(1000);
+}
+  else if (m
